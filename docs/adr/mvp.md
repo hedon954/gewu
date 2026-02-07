@@ -16,7 +16,7 @@ graph TD
     Infra --实现--> App
 
     subgraph "Infrastructure (Adapters)"
-        DB[(SQLite)]
+        DB[(PostgreSQL)]
         AI[DeepSeek API]
     end
 
@@ -31,7 +31,7 @@ graph TD
 gewu/
 ├── Cargo.toml          # 依赖管理
 ├── .env                # 环境变量 (API Keys, DB URL)
-├── migrations/         # SQLx 数据库迁移脚本
+├── migrations/         # PostgreSQL 数据库迁移脚本
 │   └── 20260207_init.sql
 ├── src/
 │   ├── main.rs         # 程序入口 (Entry Point)
@@ -47,8 +47,8 @@ gewu/
 │   │   └── llm.rs        # AI 交互接口
 │   ├── adapters/       # [适配器] 接口的具体实现
 │   │   ├── mod.rs
-│   │   ├── sqlite_repo.rs # 基于 SQLx 的实现
-│   │   └── deepseek.rs    # 基于 Reqwest 的 DeepSeek 实现
+│   │   ├── postgres_repo.rs # 基于 SQLx 的 PostgreSQL 实现
+│   │   └── deepseek.rs      # 基于 Reqwest 的 DeepSeek 实现
 │   ├── services/       # [应用] 业务逻辑流 (Use Cases)
 │   │   ├── mod.rs
 │   │   ├── manager.rs     # 协调领域对象和适配器
@@ -158,21 +158,21 @@ pub trait LlmClient: Send + Sync {
 
 这里是“干脏活”的地方，处理具体的 SQL 和 HTTP 请求。
 
-**`src/adapters/sqlite_repo.rs`**
+**`src/adapters/postgres_repo.rs`**
 使用 `sqlx` 实现持久化。
 
 ```rust
 use crate::domain::models::Task;
 use crate::domain::state::TaskStatus;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use anyhow::Result;
 
-pub struct SqliteRepository {
-    pool: SqlitePool,
+pub struct PostgresRepository {
+    pool: PgPool,
 }
 
-impl SqliteRepository {
-    pub fn new(pool: SqlitePool) -> Self {
+impl PostgresRepository {
+    pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
 
@@ -182,7 +182,7 @@ impl SqliteRepository {
         let rec = sqlx::query!(
             r#"
             INSERT INTO tasks (topic, motivation, status)
-            VALUES (?, ?, ?)
+            VALUES ($1, $2, $3)
             RETURNING id, topic, motivation, smart_goal, status, created_at, updated_at
             "#,
             topic, motivation, status as TaskStatus
@@ -220,7 +220,45 @@ pub struct DeepSeekClient {
 
 ```
 
-#### 3.4 命令行交互层 (CLI Layer)
+#### 3.4 应用层 (Application Layer)
+
+协调领域对象和适配器。
+
+**`src/services/manager.rs`**
+
+```rust
+use crate::domain::models::Task;
+use crate::ports::repository::Repository;
+use anyhow::Result;
+
+/// Service struct wrapping a repository, providing business logic.
+pub struct TaskManager<R: Repository> {
+    pub repo: R,
+}
+
+impl<R: Repository> TaskManager<R> {
+    pub fn new(repo: R) -> Self {
+        Self { repo }
+    }
+
+    /// Create a new learning task via repository, can add validations here.
+    pub async fn create_task(&self, topic: &str, motivation: &str) -> Result<Task> {
+        // Example business rule: topic must not be empty
+        if topic.trim().is_empty() {
+            anyhow::bail!("Topic cannot be empty");
+        }
+
+        self.repo.create_task(topic, motivation).await
+    }
+
+    /// Get a task by id
+    pub async fn get_task(&self, id: i64) -> Result<Task> {
+        self.repo.get_task(id).await
+    }
+}
+```
+
+#### 3.5 命令行交互层 (CLI Layer)
 
 使用 `clap` 定义命令，`dialoguer` 处理交互。
 
@@ -250,7 +288,38 @@ pub enum Commands {
 
 ```
 
----
+#### 3.6 数据库表
+
+```sql
+CREATE TABLE tasks (
+    id BIGSERIAL PRIMARY KEY,
+    topic TEXT NOT NULL,
+    motivation TEXT,
+    smart_goal TEXT,
+    status TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+```sql
+CREATE TABLE reviews (
+    id BIGSERIAL PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    question TEXT NOT NULL,
+    user_answer TEXT,
+    ai_feedback TEXT,
+    is_passed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
+-- 创建索引提高查询性能
+CREATE INDEX idx_reviews_task_id ON reviews(task_id);
+CREATE INDEX idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_created_at ON tasks(created_at);
+```
 
 ### 4. 关键技术点实现方案
 
@@ -262,7 +331,7 @@ pub enum Commands {
 // src/main.rs 伪代码
 
 struct AppState {
-    repo: SqliteRepository,
+    repo: PostgresRepository,
     llm: Box<dyn LlmClient>, // 使用 Box<dyn Trait> 实现多态
 }
 
@@ -272,8 +341,8 @@ async fn main() -> Result<()> {
 
     // 1. 初始化 DB
     let db_url = std::env::var("DATABASE_URL")?;
-    let pool = SqlitePool::connect(&db_url).await?;
-    let repo = SqliteRepository::new(pool);
+    let pool = PgPool::connect(&db_url).await?;
+    let repo = PostgresRepository::new(pool);
 
     // 2. 初始化 AI
     let api_key = std::env::var("DEEPSEEK_API_KEY")?;
@@ -322,8 +391,40 @@ pub enum AppError {
 
 Rust 的 `sqlx` 支持编译时迁移。
 
-1. 安装工具：`cargo install sqlx-cli`
-2. 创建文件：`sqlx migrate add init`
-3. 运行：`sqlx migrate run`
+1. 安装工具：`cargo install sqlx-cli --features postgres`
+2. 创建数据库：`createdb gewu` (或通过 Docker 启动 PostgreSQL)
+3. 设置环境变量：
+   ```bash
+   export DATABASE_URL="postgresql://username:password@localhost:5432/gewu"
+   ```
+4. 创建迁移文件：`sqlx migrate add init`
+5. 运行迁移：`sqlx migrate run`
 
-这保证了用户第一次运行你的工具时，会自动创建 SQLite 文件和表结构。
+**推荐使用 Docker Compose 管理 PostgreSQL：**
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gewu
+      POSTGRES_USER: gewu_user
+      POSTGRES_PASSWORD: gewu_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+启动命令：`docker-compose up -d`
+
+这保证了用户第一次运行你的工具时，会自动创建 PostgreSQL 表结构。
+
+```
+
+```
