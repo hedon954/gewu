@@ -1,3 +1,5 @@
+pub mod ui;
+
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]

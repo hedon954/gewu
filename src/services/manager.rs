@@ -13,18 +13,19 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
     }
 
     /// Create a new learning task.
-    pub async fn create_task(&mut self, topic: &str, motivation: &str) -> Result<String> {
+    pub async fn create_task(&mut self, topic: &str, motivation: &str) -> Result<()> {
         if topic.trim().is_empty() {
             anyhow::bail!("Topic cannot be empty");
         }
 
         let verdict = self.llm.audit_motivation(topic, motivation).await?;
         if !verdict.passed {
-            anyhow::bail!(verdict.print_rejected());
+            verdict.print_rejected();
+            anyhow::bail!("Motivation rejected");
         }
 
-        let task = self.repo.create_task(topic, motivation).await?;
-        println!("{}", serde_json::to_string_pretty(&task)?);
-        Ok(verdict.print_passed())
+        self.repo.create_task(topic, motivation).await?;
+        verdict.print_passed(topic);
+        Ok(())
     }
 }

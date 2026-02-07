@@ -37,17 +37,15 @@ pub trait LlmClient: Send + Sync {
 }
 
 impl GatekeeperVerdict {
-    pub fn print_passed(&self) -> String {
-        format!(
-            "✅ [PASSED]\nReason:\n  {}\n\nRecommendation:\n  {}",
-            self.reason, self.recommendation
-        )
+    pub fn print_passed(&self, topic: &str) {
+        use crate::cli::ui::UI;
+        let ui = UI::new();
+        ui.print_approved(topic, &self.reason, &self.recommendation);
     }
 
-    pub fn print_rejected(&self) -> String {
-        format!(
-            "❌ [REJECTED] Rejected.\nReason:\n  {}\n\nRecommendation:\n  {}",
-            self.reason, self.recommendation
-        )
+    pub fn print_rejected(&self) {
+        use crate::cli::ui::UI;
+        let ui = UI::new();
+        ui.print_rejected(&self.reason, &self.recommendation);
     }
 }

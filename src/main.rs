@@ -1,11 +1,11 @@
 use clap::Parser;
-use colored::Colorize;
+use console::style;
 use dialoguer::Input;
 use sqlx::PgPool;
 
 use crate::{
     adapters::{deepseek::DeepSeek, postgres_repo::PostgresRepo},
-    cli::{Gewu, Operation},
+    cli::{Gewu, Operation, ui::UI},
     services::manager::TaskManager,
 };
 
@@ -26,12 +26,14 @@ async fn main() -> anyhow::Result<()> {
     let mut manager = TaskManager::new(llm, repo);
 
     let cli = Gewu::parse();
+    let ui = UI::new();
+
     match cli.operation {
         Operation::Add(args) => {
             let topic = match args.topic {
                 Some(t) => t,
                 None => Input::<String>::new()
-                    .with_prompt("What do you want to learn?".green().to_string())
+                    .with_prompt(style("What do you want to learn?").cyan().to_string())
                     .interact_text()?,
             };
 
@@ -39,21 +41,19 @@ async fn main() -> anyhow::Result<()> {
                 Some(m) => m,
                 None => Input::<String>::new()
                     .with_prompt(
-                        format!("Why do you want to learn \"{topic}\"?")
-                            .green()
+                        style(format!("Why do you want to learn \"{}\"?", topic))
+                            .cyan()
                             .to_string(),
                     )
                     .interact_text()?,
             };
 
-            println!(
-                "Adding task, topic: {}, motivation: {}\nAI Checking...",
-                topic, motivation
-            );
+            ui.print_checking();
 
-            match manager.create_task(&topic, &motivation).await {
-                Ok(result) => println!("{}", result),
-                Err(e) => println!("{}", e),
+            if let Err(e) = manager.create_task(&topic, &motivation).await
+                && e.to_string() != "Motivation rejected"
+            {
+                eprintln!("\n{} {}", style("Error:").red().bold(), e);
             }
         }
     }
