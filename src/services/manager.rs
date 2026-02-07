@@ -1,4 +1,7 @@
-use crate::ports::{llm::LlmClient, repository::Repository};
+use crate::ports::{
+    llm::{LlmClient, SmartGoalVerdict},
+    repository::Repository,
+};
 use anyhow::Result;
 
 /// The manager of the task.
@@ -29,8 +32,12 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
         Ok(task.id)
     }
 
-    /// Execute the smart goal evaluation and update the task if approved.
-    pub async fn evaluate_smart_goal(&mut self, id: i64, smart_goal: &str) -> Result<String> {
+    /// Evaluate the user's SMART goal against the topic and motivation.
+    pub async fn evaluate_smart_goal(
+        &mut self,
+        id: i64,
+        smart_goal: &str,
+    ) -> Result<SmartGoalVerdict> {
         let task = self.repo.get_task(id).await?;
         let verdict = self
             .llm
@@ -40,18 +47,12 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
                 smart_goal,
             )
             .await?;
-        if !verdict.passed {
-            println!("{}", serde_json::to_string_pretty(&verdict)?);
-            anyhow::bail!("Smart goal rejected");
-        }
-        println!("{}", serde_json::to_string_pretty(&verdict)?);
-        Ok(verdict.recommendation)
+        Ok(verdict)
     }
 
     /// Update the smart goal of a task.
     pub async fn update_task_smart_goal(&mut self, id: i64, smart_goal: &str) -> Result<()> {
         self.repo.update_task_smart_goal(id, smart_goal).await?;
-        println!("Smart goal updated successfully");
         Ok(())
     }
 }

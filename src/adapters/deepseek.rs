@@ -8,7 +8,7 @@ use openai_api_rs::v1::{
 };
 
 use crate::{
-    ports::llm::{GatekeeperVerdict, LlmClient},
+    ports::llm::{GatekeeperVerdict, LlmClient, SmartGoalVerdict},
     services::prompts::{audit_motivation_prompt, evaluate_smart_goal_prompt},
 };
 
@@ -50,7 +50,7 @@ impl LlmClient for DeepSeek {
         topic: &str,
         motivation: &str,
         goal: &str,
-    ) -> Result<GatekeeperVerdict> {
+    ) -> Result<SmartGoalVerdict> {
         let prompt = evaluate_smart_goal_prompt(topic, motivation, goal);
         let response = self.client.chat_completion(chat_request(prompt)).await?;
 
@@ -141,7 +141,8 @@ mod tests {
 
         assert!(!result.passed);
         assert!(!result.reason.is_empty());
-        assert!(!result.recommendation.is_empty());
+        assert!(result.guidance.is_some());
+        assert!(result.refined_goal.is_none());
     }
 
     #[tokio::test]
@@ -164,6 +165,13 @@ mod tests {
 
         assert!(result.passed);
         assert!(!result.reason.is_empty());
-        assert!(!result.recommendation.is_empty());
+        assert!(result.refined_goal.is_some());
+
+        let detail = result.refined_goal.unwrap();
+        assert!(!detail.specific.is_empty());
+        assert!(!detail.measurable.is_empty());
+        assert!(!detail.achievable.is_empty());
+        assert!(!detail.relevant.is_empty());
+        assert!(!detail.time_bound.is_empty());
     }
 }
