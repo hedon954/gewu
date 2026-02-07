@@ -20,6 +20,10 @@ pub enum Operation {
     Add(AddArgs),
     /// Describe a learning task
     Describe(DescribeArgs),
+    /// List all learning tasks
+    List,
+    /// Delete a learning task
+    Delete(DeleteArgs),
 }
 
 #[derive(Args)]
@@ -36,6 +40,11 @@ pub struct AddArgs {
 #[derive(Args)]
 pub struct DescribeArgs {
     /// The id of the learning task
-    #[arg(short, long)]
+    pub id: i64,
+}
+
+#[derive(Args)]
+pub struct DeleteArgs {
+    /// The id of the learning task
     pub id: i64,
 }

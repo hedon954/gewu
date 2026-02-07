@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use sqlx::Type;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Hash)]
 #[sqlx(type_name = "TEXT", rename_all = "PascalCase")]
 pub enum TaskStatus {
     Planning,  // 正在制定计划

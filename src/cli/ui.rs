@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+
 use console::{Emoji, Term, style};
 
-use crate::{domain::models::Task, ports::llm::SmartGoalDetail};
+use crate::{
+    domain::{models::Task, state::TaskStatus},
+    ports::llm::SmartGoalDetail,
+};
 
 static CHECKMARK: Emoji<'_, '_> = Emoji("✅ ", "[OK] ");
 static CROSS: Emoji<'_, '_> = Emoji("❌ ", "[X] ");
@@ -433,6 +438,128 @@ impl UI {
 
         println!("\n{}", style(self.separator("default")).dim());
     }
+
+    pub fn print_task_list(&self, tasks: Vec<Task>) {
+        if tasks.is_empty() {
+            println!(
+                "\n{} {}",
+                LIGHTBULB,
+                style("No tasks found. Use `gewu add` to create one!").dim()
+            );
+            return;
+        }
+
+        let grouped = group_tasks_by_status(tasks);
+
+        // Display order: Active → Planning → Reviewing → Completed → Discarded
+        let status_order = [
+            (TaskStatus::Active, "Active", "green"),
+            (TaskStatus::Planning, "Planning", "yellow"),
+            (TaskStatus::Reviewing, "Reviewing", "cyan"),
+            (TaskStatus::Completed, "Completed", "green_bold"),
+            (TaskStatus::Discarded, "Discarded", "red"),
+        ];
+
+        let mut first_group = true;
+        for (status, label, _color) in &status_order {
+            if let Some(tasks) = grouped.get(status) {
+                if !first_group {
+                    println!();
+                }
+                first_group = false;
+
+                // Group header
+                let badge = self.status_badge(status);
+                println!("\n {} {} ({})", badge, style(*label).bold(), tasks.len());
+                println!(" {}", style("─".repeat(self.width - 1)).dim());
+
+                for task in tasks {
+                    self.print_task_card(task);
+                }
+            }
+        }
+        println!();
+    }
+
+    pub fn print_task_card(&self, task: &Task) {
+        // Line 1: ID + Topic
+        println!(
+            "  {} {}  {}",
+            style(format!("#{:<3}", task.id)).dim(),
+            style(&task.topic).bold(),
+            self.status_badge(&task.status),
+        );
+
+        // Line 2: Motivation (truncated) + SMART goal indicator
+        let motivation_preview = task.motivation.as_deref().unwrap_or("-");
+        let smart_icon = if task.smart_goal.is_some() {
+            format!("{}", style("SMART ✓").green().dim())
+        } else {
+            format!("{}", style("SMART ✗").yellow().dim())
+        };
+        print!(
+            "        {}",
+            style(self.truncate_text(motivation_preview, self.width - 22)).dim()
+        );
+        println!("  {}", smart_icon);
+
+        // Line 3: Timestamps
+        println!(
+            "        {} {}  {} {}",
+            style("created").dim(),
+            style(task.created_at.format("%m-%d %H:%M")).dim(),
+            style("updated").dim(),
+            style(task.updated_at.format("%m-%d %H:%M")).dim(),
+        );
+
+        // Separator between cards
+        println!("  {}", style("· · ·").dim());
+    }
+
+    fn status_badge(&self, status: &TaskStatus) -> String {
+        match status {
+            TaskStatus::Planning => format!("{}", style("◉ Planning").yellow()),
+            TaskStatus::Active => format!("{}", style("▶ Active").green()),
+            TaskStatus::Reviewing => format!("{}", style("◎ Reviewing").cyan()),
+            TaskStatus::Completed => format!("{}", style("✔ Completed").green().bold()),
+            TaskStatus::Discarded => format!("{}", style("✘ Discarded").red().dim()),
+        }
+    }
+
+    fn truncate_text(&self, text: &str, max_width: usize) -> String {
+        use unicode_width::UnicodeWidthStr;
+
+        let display_width = UnicodeWidthStr::width(text);
+        if display_width <= max_width {
+            return text.to_string();
+        }
+
+        let suffix = "...";
+        let target = max_width.saturating_sub(suffix.len());
+        let mut current_width = 0;
+        let truncated: String = text
+            .chars()
+            .take_while(|c| {
+                let w = unicode_width::UnicodeWidthChar::width(*c).unwrap_or(0);
+                if current_width + w > target {
+                    return false;
+                }
+                current_width += w;
+                true
+            })
+            .collect();
+        format!("{}{}", truncated, suffix)
+    }
+}
+
+fn group_tasks_by_status(tasks: Vec<Task>) -> HashMap<TaskStatus, Vec<Task>> {
+    let mut map = HashMap::new();
+    for task in tasks {
+        map.entry(task.status.clone())
+            .or_insert_with(Vec::new)
+            .push(task);
+    }
+    map
 }
 
 impl Default for UI {

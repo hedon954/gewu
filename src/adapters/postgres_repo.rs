@@ -53,17 +53,48 @@ impl Repository for PostgresRepo {
         Ok(())
     }
 
-    async fn get_task(&self, id: i64) -> Result<crate::domain::models::Task> {
-        let task: Task = sqlx::query_as(
+    async fn get_task(&self, id: i64) -> Result<Option<crate::domain::models::Task>> {
+        let task: Option<Task> = sqlx::query_as(
             r#"
             SELECT id, topic, motivation, smart_goal, status, created_at, updated_at FROM tasks WHERE id = $1
             "#,
         )
         .bind(id)
-        .fetch_one(&self.pool)
+        .fetch_optional(&self.pool)
         .await?;
 
-        Ok(task.into())
+        Ok(task.map(Task::into))
+    }
+
+    async fn get_tasks_by_status(
+        &self,
+        status: &[TaskStatus],
+    ) -> Result<Vec<crate::domain::models::Task>> {
+        let tasks: Vec<Task> = sqlx::query_as(
+            r#"
+            SELECT id, topic, motivation, smart_goal, status, created_at, updated_at FROM tasks
+            WHERE status = ANY($1)
+            ORDER BY updated_at DESC
+            "#,
+        )
+        .bind(status)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(tasks.into_iter().map(Task::into).collect())
+    }
+
+    async fn delete_task(&self, id: i64) -> Result<()> {
+        sqlx::query(
+            r#"
+            DELETE FROM tasks WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }
 
@@ -84,7 +115,7 @@ mod tests {
         assert!(task.created_at.timestamp() > 0);
         assert!(task.updated_at.timestamp() > 0);
 
-        let task = repo.get_task(task.id).await.unwrap();
+        let task = repo.get_task(task.id).await.unwrap().unwrap();
         assert_eq!(task.topic, "test".to_string());
         assert_eq!(task.motivation, Some("test".to_string()));
         assert_eq!(task.status, TaskStatus::Planning);
@@ -98,7 +129,7 @@ mod tests {
         repo.update_task_smart_goal(task.id, "smart goal")
             .await
             .unwrap();
-        let task = repo.get_task(task.id).await.unwrap();
+        let task = repo.get_task(task.id).await.unwrap().unwrap();
         assert_eq!(task.smart_goal, Some("smart goal".to_string()));
     }
 

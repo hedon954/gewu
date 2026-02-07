@@ -1,5 +1,5 @@
 use crate::{
-    domain::models::Task,
+    domain::{models::Task, state::TaskStatus},
     ports::{
         llm::{LlmClient, SmartGoalVerdict},
         repository::Repository,
@@ -42,15 +42,20 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
         smart_goal: &str,
     ) -> Result<SmartGoalVerdict> {
         let task = self.repo.get_task(id).await?;
-        let verdict = self
-            .llm
-            .evaluate_smart_goal(
-                &task.topic,
-                &task.motivation.unwrap_or_default(),
-                smart_goal,
-            )
-            .await?;
-        Ok(verdict)
+        match task {
+            None => anyhow::bail!("Task #{} not found", id),
+            Some(task) => {
+                let verdict = self
+                    .llm
+                    .evaluate_smart_goal(
+                        &task.topic,
+                        &task.motivation.unwrap_or_default(),
+                        smart_goal,
+                    )
+                    .await?;
+                Ok(verdict)
+            }
+        }
     }
 
     /// Update the smart goal of a task.
@@ -60,8 +65,20 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
     }
 
     /// Get a task by id
-    pub async fn get_task(&self, id: i64) -> Result<Task> {
+    pub async fn get_task(&self, id: i64) -> Result<Option<Task>> {
         let task = self.repo.get_task(id).await?;
         Ok(task)
+    }
+
+    /// Get tasks by status, supports multiple statuses
+    pub async fn get_tasks_by_status(&self, status: &[TaskStatus]) -> Result<Vec<Task>> {
+        let tasks = self.repo.get_tasks_by_status(status).await?;
+        Ok(tasks)
+    }
+
+    /// Delete a task by id
+    pub async fn delete_task(&mut self, id: i64) -> Result<()> {
+        self.repo.delete_task(id).await?;
+        Ok(())
     }
 }

@@ -8,6 +8,7 @@ use sqlx::PgPool;
 use crate::{
     adapters::{deepseek::DeepSeek, postgres_repo::PostgresRepo},
     cli::{Gewu, Operation, ui::UI},
+    domain::state::TaskStatus,
     services::manager::TaskManager,
 };
 
@@ -133,7 +134,50 @@ async fn main() -> anyhow::Result<()> {
         }
         Operation::Describe(args) => {
             let task = manager.get_task(args.id).await?;
-            ui.print_task_detail(&task);
+            if let Some(task) = task {
+                ui.print_task_detail(&task);
+            } else {
+                println!(
+                    "{}",
+                    style(format!("Task #{} not found", args.id)).red().bold()
+                );
+            }
+        }
+        Operation::List => {
+            let tasks = manager
+                .get_tasks_by_status(&[TaskStatus::Planning, TaskStatus::Active])
+                .await?;
+            ui.print_task_list(tasks);
+        }
+        Operation::Delete(args) => {
+            let task = manager.get_task(args.id).await?;
+            match task {
+                None => {
+                    println!(
+                        "{}",
+                        style(format!("Task #{} not found", args.id)).red().bold()
+                    );
+                }
+                Some(task) => {
+                    ui.print_task_card(&task);
+                    let confirmed = Confirm::new()
+                        .with_prompt(
+                            style("Are you sure you want to delete this task?")
+                                .cyan()
+                                .to_string(),
+                        )
+                        .default(false)
+                        .interact()?;
+
+                    if confirmed {
+                        manager.delete_task(args.id).await?;
+                        println!(
+                            "{}",
+                            style(format!("Task #{} deleted", args.id)).green().bold()
+                        );
+                    }
+                }
+            }
         }
     }
     Ok(())
