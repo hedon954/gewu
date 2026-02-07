@@ -21,7 +21,6 @@ impl Repository for PostgresRepo {
         topic: &str,
         motivation: &str,
     ) -> Result<crate::domain::models::Task> {
-        let status = TaskStatus::Validating;
         let task: Task = sqlx::query_as(
             r#"
             INSERT INTO tasks (topic, motivation, status)
@@ -31,7 +30,7 @@ impl Repository for PostgresRepo {
         )
         .bind(topic)
         .bind(motivation)
-        .bind(status)
+        .bind(TaskStatus::Planning)
         .fetch_one(&self.pool)
         .await?;
 
@@ -69,13 +68,13 @@ mod tests {
         let task = repo.create_task("test", "test").await.unwrap();
         assert_eq!(task.topic, "test".to_string());
         assert_eq!(task.motivation, Some("test".to_string()));
-        assert_eq!(task.status, TaskStatus::Validating);
+        assert_eq!(task.status, TaskStatus::Planning);
         assert!(task.created_at.timestamp() > 0);
         assert!(task.updated_at.timestamp() > 0);
 
         let task = repo.get_task(task.id).await.unwrap();
         assert_eq!(task.topic, "test".to_string());
         assert_eq!(task.motivation, Some("test".to_string()));
-        assert_eq!(task.status, TaskStatus::Validating);
+        assert_eq!(task.status, TaskStatus::Planning);
     }
 }
