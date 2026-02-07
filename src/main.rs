@@ -48,6 +48,18 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.operation {
         Operation::Add(args) => {
+            // Only must 3 active tasks at most
+            let tasks = manager.get_tasks_by_status(&[TaskStatus::Active]).await?;
+            if tasks.len() >= 3 {
+                println!(
+                    "{}",
+                    style("You can only have at most 3 active tasks")
+                        .red()
+                        .bold()
+                );
+                return Ok(());
+            }
+
             let topic = match args.topic {
                 Some(t) => t,
                 None => {
@@ -175,6 +187,76 @@ async fn main() -> anyhow::Result<()> {
                             "{}",
                             style(format!("Task #{} deleted", args.id)).green().bold()
                         );
+                    }
+                }
+            }
+        }
+        Operation::Plan(args) => {
+            let task = manager.get_task(args.id).await?;
+            match task {
+                None => {
+                    println!(
+                        "{}",
+                        style(format!("Task #{} not found", args.id)).red().bold()
+                    );
+                }
+                Some(task) => {
+                    ui.print_task_card(&task);
+
+                    if task.status != TaskStatus::Planning {
+                        println!(
+                            "{}",
+                            style(format!("Task #{} is not in planning status", args.id))
+                                .red()
+                                .bold()
+                        );
+                        return Ok(());
+                    }
+
+                    loop {
+                        println!(
+                            "\n{}\n{}",
+                            style("What is your SMART goal?").cyan().bold(),
+                            style("(Specific, Measurable, Achievable, Relevant, Time-bound)")
+                                .cyan()
+                        );
+                        let smart_goal = read_input()?;
+
+                        ui.print_checking_smart_goal();
+
+                        match manager.evaluate_smart_goal(args.id, &smart_goal).await {
+                            Err(e) => {
+                                eprintln!("\n{} {}", style("Error:").red().bold(), e);
+                            }
+                            Ok(verdict) => {
+                                if !verdict.passed {
+                                    // Rejected: show guidance and loop for re-entry
+                                    ui.print_smart_goal_rejected(
+                                        &verdict.reason,
+                                        &verdict.guidance.unwrap_or_default(),
+                                    );
+                                }
+
+                                // Approved: display the refined SMART goal table
+                                let refined = verdict.refined_goal.unwrap();
+                                ui.print_smart_goal_approved(&verdict.reason, &refined);
+
+                                // Ask for confirmation
+                                let confirmed = Confirm::new()
+                                    .with_prompt(
+                                        style("Accept this refined SMART goal?").cyan().to_string(),
+                                    )
+                                    .default(true)
+                                    .interact()?;
+
+                                if confirmed {
+                                    let goal_json = serde_json::to_string(&refined)?;
+                                    manager.update_task_smart_goal(args.id, &goal_json).await?;
+                                    ui.print_smart_goal_saved();
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -24,6 +24,10 @@ pub enum Operation {
     List,
     /// Delete a learning task
     Delete(DeleteArgs),
+    /// Set a SMART goal for an existing learning task that was previously created without one.
+    /// This follows the same process as the `Add` operation,
+    /// but is intended for cases where adding a task was interrupted before setting a SMART goal.
+    Plan(PlanArgs),
 }
 
 #[derive(Args)]
@@ -45,6 +49,12 @@ pub struct DescribeArgs {
 
 #[derive(Args)]
 pub struct DeleteArgs {
+    /// The id of the learning task
+    pub id: i64,
+}
+
+#[derive(Args)]
+pub struct PlanArgs {
     /// The id of the learning task
     pub id: i64,
 }
