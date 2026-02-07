@@ -131,6 +131,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Operation::Describe(args) => {
+            let task = manager.get_task(args.id).await?;
+            ui.print_task_detail(&task);
+        }
     }
     Ok(())
 }

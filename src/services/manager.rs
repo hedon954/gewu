@@ -1,6 +1,9 @@
-use crate::ports::{
-    llm::{LlmClient, SmartGoalVerdict},
-    repository::Repository,
+use crate::{
+    domain::models::Task,
+    ports::{
+        llm::{LlmClient, SmartGoalVerdict},
+        repository::Repository,
+    },
 };
 use anyhow::Result;
 
@@ -54,5 +57,11 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
     pub async fn update_task_smart_goal(&mut self, id: i64, smart_goal: &str) -> Result<()> {
         self.repo.update_task_smart_goal(id, smart_goal).await?;
         Ok(())
+    }
+
+    /// Get a task by id
+    pub async fn get_task(&self, id: i64) -> Result<Task> {
+        let task = self.repo.get_task(id).await?;
+        Ok(task)
     }
 }

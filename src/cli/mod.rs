@@ -18,6 +18,8 @@ pub struct Gewu {
 pub enum Operation {
     /// Add a new learning task
     Add(AddArgs),
+    /// Describe a learning task
+    Describe(DescribeArgs),
 }
 
 #[derive(Args)]
@@ -29,4 +31,11 @@ pub struct AddArgs {
     /// The motivation of the learning task
     #[arg(short, long)]
     pub motivation: Option<String>,
+}
+
+#[derive(Args)]
+pub struct DescribeArgs {
+    /// The id of the learning task
+    #[arg(short, long)]
+    pub id: i64,
 }

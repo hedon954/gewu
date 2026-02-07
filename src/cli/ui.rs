@@ -1,6 +1,6 @@
 use console::{Emoji, Term, style};
 
-use crate::ports::llm::SmartGoalDetail;
+use crate::{domain::models::Task, ports::llm::SmartGoalDetail};
 
 static CHECKMARK: Emoji<'_, '_> = Emoji("✅ ", "[OK] ");
 static CROSS: Emoji<'_, '_> = Emoji("❌ ", "[X] ");
@@ -381,6 +381,57 @@ impl UI {
                 println!("{}{}", indent_str, current_line);
             }
         }
+    }
+
+    pub fn print_task_detail(&self, task: &Task) {
+        // Header
+        println!("\n{}", style(self.separator("default")).dim());
+        println!(
+            "{} {}  {}",
+            BOOK,
+            style(&task.topic).bold(),
+            style(format!("(#{})", task.id)).dim()
+        );
+        println!("{}", style(self.separator("default")).dim());
+
+        // Status
+        let status_style = match task.status {
+            crate::domain::state::TaskStatus::Planning => style(&task.status).yellow(),
+            crate::domain::state::TaskStatus::Active => style(&task.status).green(),
+            crate::domain::state::TaskStatus::Reviewing => style(&task.status).cyan(),
+            crate::domain::state::TaskStatus::Completed => style(&task.status).green().bold(),
+            crate::domain::state::TaskStatus::Discarded => style(&task.status).red().dim(),
+        };
+        println!("\n{} {}: {}", CHART, style("Status").dim(), status_style);
+
+        // Motivation
+        if let Some(motivation) = &task.motivation {
+            println!("\n{} {}", THOUGHT, style("Motivation").cyan().bold());
+            self.print_wrapped_text(motivation, 3);
+        }
+
+        // SMART Goal
+        if let Some(smart_goal_str) = &task.smart_goal {
+            println!("\n{} {}", TARGET, style("SMART Goal").magenta().bold());
+            // Try to parse as structured SmartGoalDetail
+            if let Ok(detail) = serde_json::from_str::<SmartGoalDetail>(smart_goal_str) {
+                self.print_smart_goal_table(&detail);
+            } else {
+                // Fallback: plain text
+                self.print_wrapped_text(smart_goal_str, 3);
+            }
+        }
+
+        // Timestamps
+        println!(
+            "\n   {} {}    {} {}",
+            style("Created:").dim(),
+            style(task.created_at.format("%Y-%m-%d %H:%M")).dim(),
+            style("Updated:").dim(),
+            style(task.updated_at.format("%Y-%m-%d %H:%M")).dim(),
+        );
+
+        println!("\n{}", style(self.separator("default")).dim());
     }
 }
 
