@@ -23,8 +23,13 @@ pub trait LlmClient: Send + Sync {
         motivation: &str,
     ) -> Result<GatekeeperVerdict>;
 
-    // /// 军师模式：优化 SMART 目标
-    // async fn refine_plan(&self, goal: &str) -> Result<String>;
+    /// 军师模式：评估并优化 SMART 目标
+    async fn evaluate_smart_goal(
+        &mut self,
+        topic: &str,
+        motivation: &str,
+        goal: &str,
+    ) -> Result<GatekeeperVerdict>;
 
     // /// 夫子模式：生成预习摘要
     // async fn generate_primer(&self, goal: &str) -> Result<String>;

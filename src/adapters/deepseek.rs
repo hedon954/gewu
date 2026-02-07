@@ -9,7 +9,7 @@ use openai_api_rs::v1::{
 
 use crate::{
     ports::llm::{GatekeeperVerdict, LlmClient},
-    services::prompts::audit_motivation_prompt,
+    services::prompts::{audit_motivation_prompt, evaluate_smart_goal_prompt},
 };
 
 pub struct DeepSeek {
@@ -35,19 +35,7 @@ impl LlmClient for DeepSeek {
         motivation: &str,
     ) -> Result<GatekeeperVerdict> {
         let prompt = audit_motivation_prompt(topic, motivation);
-        let response = self
-            .client
-            .chat_completion(ChatCompletionRequest::new(
-                "deepseek-chat".to_string(),
-                vec![ChatCompletionMessage {
-                    role: MessageRole::assistant,
-                    content: Content::Text(prompt),
-                    name: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                }],
-            ))
-            .await?;
+        let response = self.client.chat_completion(chat_request(prompt)).await?;
 
         let content = response.choices[0]
             .message
@@ -56,6 +44,36 @@ impl LlmClient for DeepSeek {
             .unwrap_or_default();
         Ok(serde_json::from_str(&content)?)
     }
+
+    async fn evaluate_smart_goal(
+        &mut self,
+        topic: &str,
+        motivation: &str,
+        goal: &str,
+    ) -> Result<GatekeeperVerdict> {
+        let prompt = evaluate_smart_goal_prompt(topic, motivation, goal);
+        let response = self.client.chat_completion(chat_request(prompt)).await?;
+
+        let content = response.choices[0]
+            .message
+            .content
+            .clone()
+            .unwrap_or_default();
+        Ok(serde_json::from_str(&content)?)
+    }
+}
+
+fn chat_request(content: String) -> ChatCompletionRequest {
+    ChatCompletionRequest::new(
+        "deepseek-chat".to_string(),
+        vec![ChatCompletionMessage {
+            role: MessageRole::assistant,
+            content: Content::Text(content),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }],
+    )
 }
 
 #[cfg(test)]
@@ -92,6 +110,52 @@ mod tests {
             .audit_motivation(
                 "building a code review ai agent",
                 "I want to build a code review ai agent to improve my code review skills, as well as learn how to build ai agents",
+            )
+            .await
+            .unwrap();
+
+        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+
+        assert!(result.passed);
+        assert!(!result.reason.is_empty());
+        assert!(!result.recommendation.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "skip test that requires third party service"]
+    async fn evaluate_smart_goal_should_reject_bad_goal() {
+        let mut deepseek = DeepSeek::try_new(dotenv::var("DEEPSEEK_API_KEY").unwrap())
+            .await
+            .unwrap();
+
+        let result = deepseek
+            .evaluate_smart_goal(
+                "learning Rust",
+                "To become a better software engineer for my next project at work.",
+                "I want to get better.",
+            )
+            .await
+            .unwrap();
+
+        println!("{}", serde_json::to_string_pretty(&result).unwrap());
+
+        assert!(!result.passed);
+        assert!(!result.reason.is_empty());
+        assert!(!result.recommendation.is_empty());
+    }
+
+    #[tokio::test]
+    #[ignore = "skip test that requires third party service"]
+    async fn evaluate_smart_goal_should_approve_good_goal() {
+        let mut deepseek = DeepSeek::try_new(dotenv::var("DEEPSEEK_API_KEY").unwrap())
+            .await
+            .unwrap();
+
+        let result = deepseek
+            .evaluate_smart_goal(
+                "learning Rust",
+                "To become a better software engineer for my next project at work.",
+                "Within one month, complete the official Rust book and build a small CLI tool to automate part of my workflow, measuring success by completing at least one practical project and passing all end-of-chapter exercises.",
             )
             .await
             .unwrap();

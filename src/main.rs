@@ -50,10 +50,41 @@ async fn main() -> anyhow::Result<()> {
 
             ui.print_checking();
 
-            if let Err(e) = manager.create_task(&topic, &motivation).await
-                && e.to_string() != "Motivation rejected"
-            {
-                eprintln!("\n{} {}", style("Error:").red().bold(), e);
+            match manager.create_task(&topic, &motivation).await {
+                Err(e) => {
+                    if e.to_string() != "Motivation rejected" {
+                        eprintln!("\n{} {}", style("Error:").red().bold(), e);
+                    }
+                }
+                Ok(id) => {
+                    let smart_goal = Input::<String>::new()
+                        .with_prompt("What is your SMART goal?")
+                        .interact_text()?;
+
+                    match manager.evaluate_smart_goal(id, &smart_goal).await {
+                        Err(e) => {
+                            if e.to_string() != "Smart goal rejected" {
+                                eprintln!("\n{} {}", style("Error:").red().bold(), e);
+                            }
+                        }
+                        Ok(refined_goal) => {
+                            let confirm = Input::<String>::new()
+                                .with_prompt(
+                                    format!(
+                                        "Are you sure you want to update the smart goal? (yes/no)\n\n{}",
+                                        style(refined_goal.clone()).bold(),
+                                    ),
+                                )
+                                .interact_text()?;
+                            if confirm.to_lowercase().eq("yes") {
+                                manager.update_task_smart_goal(id, &refined_goal).await?;
+                                println!("Smart goal updated successfully");
+                            } else {
+                                println!("Smart goal not updated");
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -37,6 +37,22 @@ impl Repository for PostgresRepo {
         Ok(task.into())
     }
 
+    async fn update_task_smart_goal(&self, id: i64, smart_goal: &str) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE tasks SET smart_goal = $1, updated_at = $2, status = $3 WHERE id = $4
+            "#,
+        )
+        .bind(smart_goal)
+        .bind(chrono::Utc::now())
+        .bind(TaskStatus::Active)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     async fn get_task(&self, id: i64) -> Result<crate::domain::models::Task> {
         let task: Task = sqlx::query_as(
             r#"
@@ -59,12 +75,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_task() {
-        let tdb = TestPg::new(
-            "postgres://gewu_user:gewu_pass@localhost:5532/gewu".to_string(),
-            std::path::Path::new("./migrations"),
-        );
+        let (repo, _test_pg) = test_repo().await;
 
-        let repo = PostgresRepo::new(tdb.get_pool().await);
         let task = repo.create_task("test", "test").await.unwrap();
         assert_eq!(task.topic, "test".to_string());
         assert_eq!(task.motivation, Some("test".to_string()));
@@ -76,5 +88,29 @@ mod tests {
         assert_eq!(task.topic, "test".to_string());
         assert_eq!(task.motivation, Some("test".to_string()));
         assert_eq!(task.status, TaskStatus::Planning);
+    }
+
+    #[tokio::test]
+    async fn test_update_task_smart_goal() {
+        let (repo, _test_pg) = test_repo().await;
+        let task = repo.create_task("test", "test").await.unwrap();
+
+        repo.update_task_smart_goal(task.id, "smart goal")
+            .await
+            .unwrap();
+        let task = repo.get_task(task.id).await.unwrap();
+        assert_eq!(task.smart_goal, Some("smart goal".to_string()));
+    }
+
+    async fn test_repo() -> (PostgresRepo, TestPg) {
+        let pg = test_pg();
+        (PostgresRepo::new(pg.get_pool().await), pg)
+    }
+
+    fn test_pg() -> TestPg {
+        TestPg::new(
+            "postgres://gewu_user:gewu_pass@localhost:5532/gewu".to_string(),
+            std::path::Path::new("./migrations"),
+        )
     }
 }
