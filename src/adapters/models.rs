@@ -29,3 +29,21 @@ impl From<Task> for crate::domain::models::Task {
         }
     }
 }
+
+#[derive(Debug, FromRow, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Record {
+    pub id: i64,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<Record> for crate::domain::models::Record {
+    fn from(value: Record) -> Self {
+        crate::domain::models::Record {
+            id: value.id,
+            content: value.content,
+            created_at: value.created_at,
+        }
+    }
+}

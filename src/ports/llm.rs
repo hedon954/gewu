@@ -2,6 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::domain::models::{Record, Task};
+
 /// 审核动机的结果，包含是否通过以及原因说明
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GatekeeperVerdict {
@@ -43,6 +45,13 @@ pub struct SmartGoalVerdict {
     pub refined_goal: Option<SmartGoalDetail>,
 }
 
+/// 匹配任务的结果
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MatchTasksResult {
+    /// 匹配的 task ids
+    pub task_ids: Vec<i64>,
+}
+
 /// AI 客户端接口，定义了所有 AI 交互的抽象方法
 #[async_trait]
 pub trait LlmClient: Send + Sync {
@@ -61,8 +70,11 @@ pub trait LlmClient: Send + Sync {
         goal: &str,
     ) -> Result<SmartGoalVerdict>;
 
-    // /// 夫子模式：生成预习摘要
-    // async fn generate_primer(&self, goal: &str) -> Result<String>;
+    /// 匹配任务：将学习记录与任务进行匹配
+    async fn match_tasks(&mut self, tasks: &[Task], record: &str) -> Result<Vec<i64>>;
+
+    /// 夫子模式：生成学习指南
+    async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String>;
 
     // /// 考官模式：生成考题
     // async fn generate_questions(&self, goal: &str) -> Result<Vec<String>>;

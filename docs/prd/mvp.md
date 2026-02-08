@@ -22,14 +22,14 @@ Gewu 是一个运行在终端（Terminal）里的**反人性**学习管理工具
 
 ### 3.1 核心指令集 (CLI Commands)
 
-| 指令               | 描述       | 交互逻辑                                                           |
-| ------------------ | ---------- | ------------------------------------------------------------------ |
-| `gewu add <topic>` | 新增学习项 | 触发交互式问答，输入 `motivation`。系统调用 LLM 判定 Pass/Reject。 |
-| `gewu list`        | 查看看板   | 列出当前 `Active` (上限3个) 和 `Pending` 的任务状态。              |
-| `gewu plan <id>`   | 制定计划   | 针对通过验证的任务，进行多轮对话，确定 SMART 目标。                |
-| `gewu learn <id>`  | 开始学习   | 状态转为 `Active`，打印 AI 生成的“预习摘要 (Primer)”。             |
-| `gewu commit <id>` | 提交成果   | 用户输入学习总结。系统进入“考校模式”，生成 3 个问题。              |
-| `gewu review <id>` | 回答考题   | 用户回答 AI 的考题。AI 评分，决定是 Pass 还是 Retry。              |
+| 指令               | 描述       | 交互逻辑                                                                 |
+| ------------------ | ---------- | ------------------------------------------------------------------------ |
+| `gewu add <topic>` | 新增学习项 | 触发交互式问答，输入 `motivation`。系统调用 LLM 判定 Pass/Reject。       |
+| `gewu list`        | 查看看板   | 列出当前 `Active` (上限3个) 和 `Planning` 的任务状态。                   |
+| `gewu plan <id>`   | 制定计划   | 针对通过验证的任务，进行多轮对话，确定 SMART 目标。并将状态转为 `Active` |
+| `gewu learn <id>`  | 开始学习   | 打印 AI 生成的“预习摘要 (Primer)”。                                      |
+| `gewu commit <id>` | 提交成果   | 用户输入学习总结。系统进入“考校模式”，生成 3 个问题。                    |
+| `gewu review <id>` | 回答考题   | 用户回答 AI 的考题。AI 评分，决定是 Pass 还是 Retry。                    |
 
 ### 3.2 AI 人格设定 (System Prompts)
 

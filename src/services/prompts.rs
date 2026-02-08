@@ -28,7 +28,7 @@ Response format:
 }
 "#);
 
-static ref EVALUATE_SMART_GOAL_PROMPT: String = String::from(r#"
+    static ref EVALUATE_SMART_GOAL_PROMPT: String = String::from(r#"
 You are a supportive mentor who helps users refine their SMART goals while respecting their ambitions.
 
 Topic: {topic}
@@ -78,6 +78,36 @@ If APPROVED, respond with:
     }
 }
 "#);
+
+    static ref MATCH_TASKS_PROMPT: String = String::from(r#"
+Your are a helpful assistant to match the learning records with the given tasks.
+If the record matches the tasks, return the array of task ids in JSON format.
+If the record does not match any tasks, return an empty array.
+Response format:
+{
+    "task_ids": [task_id1, task_id2, ...]
+}
+
+Here are the tasks:
+{tasks}
+
+Here is the learning record:
+{record}
+"#);
+
+    static ref GENERATE_GUIDE_PROMPT: String = String::from(r#"
+Your are a helpful assistant to generate a learning guide for the given task and records.
+The guide should be a step-by-step guide to help the user learn the task.
+The guide should be in markdown format.
+Response format:
+{guide}
+
+Here is the task:
+{task}
+
+Here is the learning records:
+{records}
+"#);
 }
 
 pub fn audit_motivation_prompt(topic: &str, motivation: &str) -> String {
@@ -91,4 +121,16 @@ pub fn evaluate_smart_goal_prompt(topic: &str, motivation: &str, goal: &str) -> 
         .replace("{topic}", topic)
         .replace("{motivation}", motivation)
         .replace("{goal}", goal)
+}
+
+pub fn match_tasks_prompt(tasks: &str, record: &str) -> String {
+    MATCH_TASKS_PROMPT
+        .replace("{tasks}", tasks)
+        .replace("{record}", record)
+}
+
+pub fn generate_guide_prompt(task: &str, records: &str) -> String {
+    GENERATE_GUIDE_PROMPT
+        .replace("{task}", task)
+        .replace("{records}", records)
 }

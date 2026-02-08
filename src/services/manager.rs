@@ -1,5 +1,8 @@
 use crate::{
-    domain::{models::Task, state::TaskStatus},
+    domain::{
+        models::{Record, Task},
+        state::TaskStatus,
+    },
     ports::{
         llm::{LlmClient, SmartGoalVerdict},
         repository::Repository,
@@ -80,5 +83,30 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
     pub async fn delete_task(&mut self, id: i64) -> Result<()> {
         self.repo.delete_task(id).await?;
         Ok(())
+    }
+
+    /// Match the learning record with the tasks
+    pub async fn match_record_with_tasks(&mut self, record: &str) -> Result<Vec<i64>> {
+        let tasks = self.get_tasks_by_status(&[TaskStatus::Active]).await?;
+        self.llm.match_tasks(&tasks, record).await
+    }
+
+    /// Record the learning progress for the given tasks
+    pub async fn record_learning_progress(&mut self, task_ids: &[i64], record: &str) -> Result<()> {
+        let record = self.repo.create_record(record).await?;
+        for task_id in task_ids {
+            self.repo.create_task_record(*task_id, record.id).await?;
+        }
+        Ok(())
+    }
+
+    /// Get the learning records for the given task
+    pub async fn get_task_records(&self, task_id: i64) -> Result<Vec<Record>> {
+        self.repo.get_task_records(task_id).await
+    }
+
+    /// Generate a guide for the given task and records
+    pub async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String> {
+        self.llm.generate_guide(task, records).await
     }
 }

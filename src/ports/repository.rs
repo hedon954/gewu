@@ -1,7 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::domain::{models::Task, state::TaskStatus};
+use crate::domain::{
+    models::{Record, Task},
+    state::TaskStatus,
+};
 
 #[async_trait]
 pub trait Repository: Send + Sync {
@@ -19,4 +22,13 @@ pub trait Repository: Send + Sync {
 
     /// Delete a task by id
     async fn delete_task(&self, id: i64) -> Result<()>;
+
+    /// Create a new learning record
+    async fn create_record(&self, content: &str) -> Result<Record>;
+
+    /// Create a new task record
+    async fn create_task_record(&self, task_id: i64, record_id: i64) -> Result<()>;
+
+    /// Get the learning records for the given task
+    async fn get_task_records(&self, task_id: i64) -> Result<Vec<Record>>;
 }

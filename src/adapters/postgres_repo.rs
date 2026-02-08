@@ -2,7 +2,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use sqlx::PgPool;
 
-use crate::{adapters::models::Task, domain::state::TaskStatus, ports::repository::Repository};
+use crate::{
+    adapters::models::{Record, Task},
+    domain::state::TaskStatus,
+    ports::repository::Repository,
+};
 
 pub struct PostgresRepo {
     pool: PgPool,
@@ -95,6 +99,51 @@ impl Repository for PostgresRepo {
         .await?;
 
         Ok(())
+    }
+
+    async fn create_record(&self, content: &str) -> Result<crate::domain::models::Record> {
+        let record: Record = sqlx::query_as(
+            r#"
+            INSERT INTO records (content)
+            VALUES ($1)
+            RETURNING id, content, created_at;
+            "#,
+        )
+        .bind(content)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(record.into())
+    }
+
+    async fn create_task_record(&self, task_id: i64, record_id: i64) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO task_records (task_id, record_id)
+            VALUES ($1, $2)
+            "#,
+        )
+        .bind(task_id)
+        .bind(record_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_task_records(&self, task_id: i64) -> Result<Vec<crate::domain::models::Record>> {
+        let records: Vec<Record> = sqlx::query_as(
+            r#"
+            SELECT r.id, r.content, r.created_at FROM records r
+            INNER JOIN task_records tr ON r.id = tr.record_id
+            WHERE tr.task_id = $1
+            "#,
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(records.into_iter().map(Record::into).collect())
     }
 }
 

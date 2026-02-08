@@ -28,6 +28,10 @@ pub enum Operation {
     /// This follows the same process as the `Add` operation,
     /// but is intended for cases where adding a task was interrupted before setting a SMART goal.
     Plan(PlanArgs),
+    /// Record learning progress. The LLM will automatically verify if your submission aligns with active tasks.
+    Record(RecordArgs),
+    /// Ask the llm to guide you on how to learn the given task.
+    Guide(GuideArgs),
 }
 
 #[derive(Args)]
@@ -55,6 +59,18 @@ pub struct DeleteArgs {
 
 #[derive(Args)]
 pub struct PlanArgs {
+    /// The id of the learning task
+    pub id: i64,
+}
+
+#[derive(Args)]
+pub struct RecordArgs {
+    /// The content of the learning record
+    pub content: String,
+}
+
+#[derive(Args)]
+pub struct GuideArgs {
     /// The id of the learning task
     pub id: i64,
 }

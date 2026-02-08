@@ -8,8 +8,12 @@ use openai_api_rs::v1::{
 };
 
 use crate::{
-    ports::llm::{GatekeeperVerdict, LlmClient, SmartGoalVerdict},
-    services::prompts::{audit_motivation_prompt, evaluate_smart_goal_prompt},
+    domain::models::{Record, Task},
+    ports::llm::{GatekeeperVerdict, LlmClient, MatchTasksResult, SmartGoalVerdict},
+    services::prompts::{
+        audit_motivation_prompt, evaluate_smart_goal_prompt, generate_guide_prompt,
+        match_tasks_prompt,
+    },
 };
 
 pub struct DeepSeek {
@@ -60,6 +64,34 @@ impl LlmClient for DeepSeek {
             .clone()
             .unwrap_or_default();
         Ok(serde_json::from_str(&content)?)
+    }
+
+    async fn match_tasks(&mut self, tasks: &[Task], record: &str) -> Result<Vec<i64>> {
+        let task_json_str = serde_json::to_string(tasks)?;
+        let prompt = match_tasks_prompt(&task_json_str, record);
+        let response = self.client.chat_completion(chat_request(prompt)).await?;
+
+        let content = response.choices[0]
+            .message
+            .content
+            .clone()
+            .unwrap_or_default();
+        let result: MatchTasksResult = serde_json::from_str(&content)?;
+        Ok(result.task_ids)
+    }
+
+    async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String> {
+        let task_json_str = serde_json::to_string(task)?;
+        let record_json_str = serde_json::to_string(records)?;
+        let prompt = generate_guide_prompt(&task_json_str, &record_json_str);
+        let response = self.client.chat_completion(chat_request(prompt)).await?;
+
+        let content = response.choices[0]
+            .message
+            .content
+            .clone()
+            .unwrap_or_default();
+        Ok(content)
     }
 }
 

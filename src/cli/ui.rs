@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use console::{Emoji, Term, style};
 
 use crate::{
-    domain::{models::Task, state::TaskStatus},
+    domain::{
+        models::{Record, Task},
+        state::TaskStatus,
+    },
     ports::llm::SmartGoalDetail,
 };
 
@@ -549,6 +552,22 @@ impl UI {
             })
             .collect();
         format!("{}{}", truncated, suffix)
+    }
+
+    pub fn print_record_list(&self, records: &Vec<Record>) {
+        if records.is_empty() {
+            return;
+        }
+
+        println!("\n{}", style(self.separator("default")).dim());
+        println!("{}", style("Records:").cyan().bold());
+        println!("{}", style(self.separator("default")).dim());
+        for record in records {
+            println!("{}", style(&record.content).dim());
+            println!("{}", style("created").dim());
+            println!("{}", style(record.created_at.format("%m-%d %H:%M")).dim());
+            println!("{}", style("─".repeat(self.width - 1)).dim());
+        }
     }
 }
 

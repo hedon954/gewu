@@ -261,6 +261,71 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Operation::Record(args) => {
+            let tasks = manager.get_tasks_by_status(&[TaskStatus::Active]).await?;
+            if tasks.is_empty() {
+                println!("{}", style("You have no active tasks").red().bold());
+                return Ok(());
+            }
+            for task in tasks {
+                ui.print_task_card(&task);
+            }
+
+            let task_ids = manager.match_record_with_tasks(&args.content).await?;
+            if task_ids.is_empty() {
+                println!("{}", style("No tasks matched the record").red().bold());
+                return Ok(());
+            } else {
+                println!(
+                    "{}: {}",
+                    style("The record matches the following tasks:")
+                        .green()
+                        .bold(),
+                    task_ids
+                        .iter()
+                        .map(|id| format!("#{}", id))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+            }
+
+            let confirmed = Confirm::new()
+                .with_prompt(
+                    style("Are you sure you want to record this learning progress?")
+                        .cyan()
+                        .to_string(),
+                )
+                .default(true)
+                .interact()?;
+
+            if confirmed {
+                manager
+                    .record_learning_progress(&task_ids, &args.content)
+                    .await?;
+                println!("Successfully recorded the learning progress");
+            }
+        }
+        Operation::Guide(args) => {
+            let task = manager.get_task(args.id).await?;
+            match task {
+                None => {
+                    println!(
+                        "{}",
+                        style(format!("Task #{} not found", args.id)).red().bold()
+                    );
+                }
+                Some(task) => {
+                    ui.print_task_card(&task);
+
+                    let records = manager.get_task_records(task.id).await?;
+                    ui.print_record_list(&records);
+
+                    println!("{}", style("Generating guide...").cyan().bold());
+                    let guide = manager.generate_guide(&task, &records).await?;
+                    println!("\n{}", style(guide).green());
+                }
+            }
+        }
     }
     Ok(())
 }

@@ -77,7 +77,6 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskStatus {
-    Validating,     // 正在 AI 审核
     Planning,       // 正在制定计划
     Active,         // 进行中
     Reviewing,      // 考核中
@@ -88,19 +87,6 @@ pub enum TaskStatus {
 impl fmt::Display for TaskStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-// 可以在这里定义状态流转规则，防止非法跳转
-impl TaskStatus {
-    pub fn can_transition_to(&self, next: &TaskStatus) -> bool {
-        match (self, next) {
-            (Self::Validating, Self::Planning) => true,
-            (Self::Validating, Self::Discarded) => true,
-            (Self::Planning, Self::Active) => true,
-            // ... 其他规则
-            _ => false,
-        }
     }
 }
 
@@ -421,10 +407,7 @@ volumes:
   postgres_data:
 ```
 
-启动命令：`docker-compose up -d`
+启动命令：`docker compose up -d`
 
 这保证了用户第一次运行你的工具时，会自动创建 PostgreSQL 表结构。
 
-```
-
-```
