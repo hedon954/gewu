@@ -73,8 +73,12 @@ pub trait LlmClient: Send + Sync {
     /// 匹配任务：将学习记录与任务进行匹配
     async fn match_tasks(&mut self, tasks: &[Task], record: &str) -> Result<Vec<i64>>;
 
-    /// 夫子模式：生成学习指南
-    async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String>;
+    /// 夫子模式：流式生成学习指南
+    async fn generate_guide_stream(
+        &mut self,
+        task: &Task,
+        records: &[Record],
+    ) -> Result<tokio::sync::mpsc::Receiver<String>>;
 
     // /// 考官模式：生成考题
     // async fn generate_questions(&self, goal: &str) -> Result<Vec<String>>;

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use console::{Emoji, Term, style};
+use termimad::MadSkin;
 
 use crate::{
     domain::{
@@ -18,6 +19,7 @@ static TARGET: Emoji<'_, '_> = Emoji("🎯 ", "=> ");
 static BOOK: Emoji<'_, '_> = Emoji("📝 ", "");
 static CHART: Emoji<'_, '_> = Emoji("📊 ", "");
 static THOUGHT: Emoji<'_, '_> = Emoji("💭 ", "");
+static COMPASS: Emoji<'_, '_> = Emoji("🧭 ", "=> ");
 
 pub struct UI {
     width: usize,
@@ -554,20 +556,177 @@ impl UI {
         format!("{}{}", truncated, suffix)
     }
 
-    pub fn print_record_list(&self, records: &Vec<Record>) {
+    // ─── Record ───────────────────────────────────────────
+
+    pub fn print_matching_records(&self) {
+        println!(
+            "\n{} {}",
+            HOURGLASS,
+            style("Matching your record with tasks...").cyan()
+        );
+    }
+
+    pub fn print_matched_tasks(&self, task_ids: &[i64]) {
+        println!("\n{}", style(self.separator("success")).green().dim());
+        println!(
+            "{} {}  {}",
+            CHECKMARK,
+            style("RECORD MATCHED").green().bold(),
+            task_ids
+                .iter()
+                .map(|id| format!("{}", style(format!("#{}", id)).cyan().bold()))
+                .collect::<Vec<String>>()
+                .join("  ")
+        );
+        println!("{}", style(self.separator("success")).green().dim());
+    }
+
+    pub fn print_no_matching_tasks(&self) {
+        println!("\n{}", style(self.separator("error")).red().dim());
+        println!(
+            "{} {}",
+            CROSS,
+            style("No matching tasks found for this record")
+                .red()
+                .bold()
+        );
+        println!("{}", style(self.separator("error")).red().dim());
+    }
+
+    pub fn print_record_success(&self) {
+        println!(
+            "\n{} {}\n",
+            CHECKMARK,
+            style("Learning progress recorded!").green().bold()
+        );
+    }
+
+    pub fn print_record_list(&self, records: &[Record]) {
         if records.is_empty() {
+            println!(
+                "\n{} {}",
+                LIGHTBULB,
+                style("No records yet. Use `gewu record` to track your progress!").dim()
+            );
             return;
         }
 
         println!("\n{}", style(self.separator("default")).dim());
-        println!("{}", style("Records:").cyan().bold());
-        println!("{}", style(self.separator("default")).dim());
-        for record in records {
-            println!("{}", style(&record.content).dim());
-            println!("{}", style("created").dim());
-            println!("{}", style(record.created_at.format("%m-%d %H:%M")).dim());
-            println!("{}", style("─".repeat(self.width - 1)).dim());
+        println!(
+            " {} {} ({})",
+            BOOK,
+            style("Learning Records").cyan().bold(),
+            records.len()
+        );
+        println!(" {}", style("─".repeat(self.width - 1)).dim());
+
+        // Show records in reverse chronological order (newest first)
+        for (i, record) in records.iter().rev().enumerate() {
+            let timestamp = style(record.created_at.format("%m-%d %H:%M")).dim();
+            let content = self.truncate_text(&record.content, self.width - 18);
+            println!(
+                "  {}  {}  {}",
+                style(format!("{:>2}.", i + 1)).dim(),
+                content,
+                timestamp,
+            );
+            if i < records.len() - 1 {
+                println!("  {}", style("· · ·").dim());
+            }
         }
+        println!("{}", style(self.separator("default")).dim());
+    }
+
+    // ─── Guide ───────────────────────────────────────────
+
+    pub fn print_guide_header(&self) {
+        println!(
+            "\n{} {}",
+            HOURGLASS,
+            style("Generating next-step guide...").cyan()
+        );
+    }
+
+    pub fn print_guide_footer(&self) {
+        println!("\n{}", style(self.separator("default")).dim());
+        println!(
+            " {} {}",
+            COMPASS,
+            style("Keep going! Record your progress with `gewu record`").dim()
+        );
+        println!("{}", style(self.separator("default")).dim());
+    }
+
+    /// Render streaming guide output with markdown formatting.
+    /// Buffers text by paragraph and renders each complete paragraph
+    /// with termimad for proper markdown styling.
+    pub async fn print_guide_streaming(&self, rx: &mut tokio::sync::mpsc::Receiver<String>) {
+        let skin = Self::guide_skin();
+        let mut buffer = String::new();
+        let mut block_count: usize = 0;
+
+        println!(); // breathing room before guide content
+
+        while let Some(chunk) = rx.recv().await {
+            buffer.push_str(&chunk);
+            Self::flush_markdown_blocks(&mut buffer, &skin, &mut block_count);
+        }
+
+        // Render any remaining content
+        if !buffer.trim().is_empty() {
+            if block_count > 0 {
+                println!();
+            }
+            skin.print_text(&buffer);
+        }
+    }
+
+    /// Flush complete markdown blocks (paragraphs) from the buffer,
+    /// rendering them with termimad. Respects code fence boundaries.
+    /// Adds blank lines between blocks for better readability.
+    fn flush_markdown_blocks(buffer: &mut String, skin: &MadSkin, block_count: &mut usize) {
+        loop {
+            // Don't split if we're inside a code block
+            let fence_count = buffer.matches("```").count();
+            if !fence_count.is_multiple_of(2) {
+                return;
+            }
+
+            // Look for paragraph boundary (double newline)
+            if let Some(pos) = buffer.find("\n\n") {
+                let block = &buffer[..pos];
+                if !block.trim().is_empty() {
+                    // Add extra spacing before each block (except the first)
+                    if *block_count > 0 {
+                        // Add extra blank line before headers for more breathing room
+                        if block.trim_start().starts_with("###") {
+                            println!();
+                        }
+                        println!();
+                    }
+                    skin.print_text(block);
+                    *block_count += 1;
+                }
+                *buffer = buffer[pos + 2..].to_string();
+            } else {
+                return;
+            }
+        }
+    }
+
+    /// Create a customized termimad skin for guide output
+    fn guide_skin() -> MadSkin {
+        use crossterm::style::{Attribute, Color};
+
+        let mut skin = MadSkin::default();
+        skin.set_headers_fg(Color::Cyan);
+        skin.headers[0].add_attr(Attribute::Bold);
+        skin.headers[1].add_attr(Attribute::Bold);
+        skin.headers[2].add_attr(Attribute::Bold);
+        skin.bold.set_fg(Color::White);
+        skin.italic.set_fg(Color::Magenta);
+        skin.inline_code.set_fg(Color::Yellow);
+        skin
     }
 }
 

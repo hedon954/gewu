@@ -267,34 +267,22 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", style("You have no active tasks").red().bold());
                 return Ok(());
             }
-            for task in tasks {
-                ui.print_task_card(&task);
+            for task in &tasks {
+                ui.print_task_card(task);
             }
+
+            ui.print_matching_records();
 
             let task_ids = manager.match_record_with_tasks(&args.content).await?;
             if task_ids.is_empty() {
-                println!("{}", style("No tasks matched the record").red().bold());
+                ui.print_no_matching_tasks();
                 return Ok(());
-            } else {
-                println!(
-                    "{}: {}",
-                    style("The record matches the following tasks:")
-                        .green()
-                        .bold(),
-                    task_ids
-                        .iter()
-                        .map(|id| format!("#{}", id))
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                );
             }
 
+            ui.print_matched_tasks(&task_ids);
+
             let confirmed = Confirm::new()
-                .with_prompt(
-                    style("Are you sure you want to record this learning progress?")
-                        .cyan()
-                        .to_string(),
-                )
+                .with_prompt(style("Record this learning progress?").cyan().to_string())
                 .default(true)
                 .interact()?;
 
@@ -302,7 +290,7 @@ async fn main() -> anyhow::Result<()> {
                 manager
                     .record_learning_progress(&task_ids, &args.content)
                     .await?;
-                println!("Successfully recorded the learning progress");
+                ui.print_record_success();
             }
         }
         Operation::Guide(args) => {
@@ -320,9 +308,12 @@ async fn main() -> anyhow::Result<()> {
                     let records = manager.get_task_records(task.id).await?;
                     ui.print_record_list(&records);
 
-                    println!("{}", style("Generating guide...").cyan().bold());
-                    let guide = manager.generate_guide(&task, &records).await?;
-                    println!("\n{}", style(guide).green());
+                    ui.print_guide_header();
+
+                    let mut rx = manager.generate_guide_stream(&task, &records).await?;
+                    ui.print_guide_streaming(&mut rx).await;
+
+                    ui.print_guide_footer();
                 }
             }
         }

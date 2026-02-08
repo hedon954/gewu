@@ -105,8 +105,12 @@ impl<LLM: LlmClient, R: Repository> TaskManager<LLM, R> {
         self.repo.get_task_records(task_id).await
     }
 
-    /// Generate a guide for the given task and records
-    pub async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String> {
-        self.llm.generate_guide(task, records).await
+    /// Stream generate a guide for the given task and records
+    pub async fn generate_guide_stream(
+        &mut self,
+        task: &Task,
+        records: &[Record],
+    ) -> Result<tokio::sync::mpsc::Receiver<String>> {
+        self.llm.generate_guide_stream(task, records).await
     }
 }

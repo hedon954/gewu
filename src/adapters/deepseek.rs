@@ -1,9 +1,12 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use openai_api_rs::v1::{
     api::OpenAIClient,
     chat_completion::{
-        ChatCompletionMessage, Content, MessageRole, chat_completion::ChatCompletionRequest,
+        ChatCompletionMessage, Content, MessageRole,
+        chat_completion::ChatCompletionRequest,
+        chat_completion_stream::{ChatCompletionStreamRequest, ChatCompletionStreamResponse},
     },
 };
 
@@ -80,23 +83,56 @@ impl LlmClient for DeepSeek {
         Ok(result.task_ids)
     }
 
-    async fn generate_guide(&mut self, task: &Task, records: &[Record]) -> Result<String> {
+    async fn generate_guide_stream(
+        &mut self,
+        task: &Task,
+        records: &[Record],
+    ) -> Result<tokio::sync::mpsc::Receiver<String>> {
         let task_json_str = serde_json::to_string(task)?;
         let record_json_str = serde_json::to_string(records)?;
         let prompt = generate_guide_prompt(&task_json_str, &record_json_str);
-        let response = self.client.chat_completion(chat_request(prompt)).await?;
 
-        let content = response.choices[0]
-            .message
-            .content
-            .clone()
-            .unwrap_or_default();
-        Ok(content)
+        let mut stream = self
+            .client
+            .chat_completion_stream(stream_chat_request(prompt))
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to start streaming: {}", e))?;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+        tokio::spawn(async move {
+            while let Some(response) = stream.next().await {
+                match response {
+                    ChatCompletionStreamResponse::Content(content) => {
+                        if tx.send(content).await.is_err() {
+                            break;
+                        }
+                    }
+                    ChatCompletionStreamResponse::Done => break,
+                    _ => {}
+                }
+            }
+        });
+
+        Ok(rx)
     }
 }
 
 fn chat_request(content: String) -> ChatCompletionRequest {
     ChatCompletionRequest::new(
+        "deepseek-chat".to_string(),
+        vec![ChatCompletionMessage {
+            role: MessageRole::assistant,
+            content: Content::Text(content),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        }],
+    )
+}
+
+fn stream_chat_request(content: String) -> ChatCompletionStreamRequest {
+    ChatCompletionStreamRequest::new(
         "deepseek-chat".to_string(),
         vec![ChatCompletionMessage {
             role: MessageRole::assistant,
