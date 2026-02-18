@@ -44,6 +44,3 @@ allowed-tools: Read, Grep, Glob, Bash(git diff:*), Bash(cargo clippy:*)
 - `scope` 对应变更所在的模块，如 `adapters`、`services`、`cli`、`domain`、`ports`
 - `subject` 使用祈使句，首字母小写，不加句号
 - 若变更跨多个模块，`scope` 可省略
-
-**可选操作**
-审查完毕后，如果你觉得没有需要修改的地方，则将你上述生成的 commit message 执行 git commit 命令进行提交。
